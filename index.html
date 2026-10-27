@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RB Market Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+:root{--font-anthropic-sans:Inter,system-ui,sans-serif;--font-anthropic-serif:"Source Serif 4",Georgia,serif;
+--color-fg:#1f1e1d;--color-fg-muted:#6b6862;--color-bg:#faf9f5;--color-panel:#ffffff;--color-border-line:#e6e3da;--color-ok:#2f7d4f;--color-warn:#a8650a;--color-bad:#b3372f;
+--cds-font-size-caption:.8125rem;--cds-font-size-body:.9375rem;--cds-font-size-heading:1rem;--cds-font-size-title:1.75rem;--cds-font-weight-medium:500;
+--cds-gap-xs:.25rem;--cds-gap-sm:.5rem;--cds-gap-md:1rem;--cds-gap-lg:1.5rem;--cds-pad-xs:.25rem;--cds-pad-sm:.5rem;--cds-pad-md:.75rem;--cds-pad-lg:1rem;--cds-radius:10px;
+--cds-chart-grid:#ece9e1;--cds-chart-axis:#cfcac0;--cds-surface-popover:#ffffff;--cds-border:#e6e3da;--cds-shadow-popover:0 4px 16px rgba(0,0,0,.08);--cds-dur-slow:.3s}
+@media (prefers-color-scheme: dark){:root{--color-fg:#ecebe6;--color-fg-muted:#a3a097;--color-bg:#1d1c1a;--color-panel:#262522;--color-border-line:#3a3833;--color-ok:#6cc08b;--color-warn:#e0a54a;--color-bad:#ec7a70;
+--cds-chart-grid:#33312d;--cds-chart-axis:#4a4741;--cds-surface-popover:#2d2c29;--cds-border:#3a3833;--cds-shadow-popover:0 4px 16px rgba(0,0,0,.4)}}
+html,body{margin:0;background:var(--color-bg)}
+#dash-root{max-width:1200px;margin:0 auto;padding:24px 16px 48px}
+.rb-foot{margin-top:2rem;font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+</style>
+<script>
+// Pequeno substituto do runtime do painel: carrega os CSV de /data e corre os cálculos.
+window.dash=(function(){
+  const files={boosters:'data/boosters.csv',cartas:'data/cartas.csv',sets:'data/sets.csv',cambio:'data/cambio.csv'};
+  const store={}, calcs=[], subs=[];
+  for(const k in files) store[k]={status:'loading',data:[]};
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches;
+  const colors=dark?['#7aa7e8','#e8a26a','#8bc7a0','#c99be0','#e07a8a','#d8c26a','#6ac4c9','#b3a89a']:['#3a6fc4','#d0763a','#3f9363','#8a5bb0','#c24a5c','#a88c1f','#2a9196','#7c7166'];
+  function runCalcs(){ calcs.forEach(c=>{ const ins=c.inputs.map(i=>store[i]); if(ins.some(x=>x.status!=='ok')){store[c.id]={status:ins.some(x=>x.status==='error')?'error':'loading',data:[]};return;}
+    try{ store[c.id]={status:'ok',data:c.fn(...ins.map(x=>x.data))}; }catch(e){ console.error(c.id,e); store[c.id]={status:'error',data:[]}; } }); }
+  function fire(){ runCalcs(); subs.forEach(f=>{try{f()}catch(e){console.error(e)}}); }
+  Promise.all(Object.entries(files).map(([k,u])=>d3.csv(u+'?v='+Date.now()).then(rows=>{store[k]={status:'ok',data:rows,columns:rows.columns};}).catch(()=>{store[k]={status:'error',data:[]};}))).then(fire);
+  let t; addEventListener('resize',()=>{clearTimeout(t);t=setTimeout(fire,150);});
+  return {colors, data:id=>store[id]||{status:'missing',data:[]}, calc:(id,o)=>calcs.push({id,...o}), onData:f=>{subs.push(f);f();}, setLink:n=>history.replaceState(null,'','#'+n), refresh:()=>{}, loader:()=>{}};
+})();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<style>
+.rb{font-family:var(--font-anthropic-sans);color:var(--color-fg)}
+.rb-head{display:flex;flex-wrap:wrap;gap:var(--cds-gap-md);align-items:flex-end;justify-content:space-between;margin-bottom:var(--cds-gap-md)}
+.rb-title{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);margin:0}
+.rb-take{color:var(--color-fg-muted);font-size:var(--cds-font-size-body);margin:var(--cds-gap-xs) 0 0}
+.rb-tabs{display:flex;gap:var(--cds-gap-xs);margin-bottom:var(--cds-gap-md);border-bottom:1px solid var(--color-border-line)}
+.rb-tab{background:none;border:0;border-bottom:2px solid transparent;padding:var(--cds-pad-sm) var(--cds-pad-md);font:inherit;color:var(--color-fg-muted);cursor:pointer}
+.rb-tab[aria-selected=true]{color:var(--color-fg);border-bottom-color:var(--color-fg)}
+.rb-btn{font:inherit;font-size:var(--cds-font-size-caption);padding:var(--cds-pad-xs) var(--cds-pad-md);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-panel);color:var(--color-fg);cursor:pointer}
+.rb-hint{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin-top:var(--cds-gap-xs)}
+.rb-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));gap:var(--cds-gap-md);margin-bottom:var(--cds-gap-md)}
+.rb-card{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);position:relative}
+.rb-card h3{font-size:var(--cds-font-size-heading);font-weight:var(--cds-font-weight-medium);margin:0}
+.rb-note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin:var(--cds-gap-xs) 0 var(--cds-gap-sm)}
+.rb-big{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);font-variant-numeric:tabular-nums}
+.rb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:var(--cds-gap-md);margin-bottom:var(--cds-gap-md)}
+.rb-chart{min-height:240px}
+.rb table{width:100%;border-collapse:collapse;font-size:var(--cds-font-size-body);font-variant-numeric:tabular-nums}
+.rb th,.rb td{text-align:left;padding:var(--cds-pad-xs) var(--cds-pad-sm);border-bottom:1px solid var(--color-border-line)}
+.rb th{font-weight:var(--cds-font-weight-medium);color:var(--color-fg-muted);font-size:var(--cds-font-size-caption)}
+.rb td.n,.rb th.n{text-align:right}
+.up{color:var(--color-ok)}.down{color:var(--color-bad)}
+.rb select{font:inherit;padding:var(--cds-pad-xs);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg)}
+.rb-tip{position:absolute;pointer-events:none;background:var(--cds-surface-popover);border:1px solid var(--cds-border);border-radius:var(--cds-radius);box-shadow:var(--cds-shadow-popover);padding:var(--cds-pad-xs) var(--cds-pad-sm);font-size:var(--cds-font-size-caption);display:none;white-space:nowrap}
+[data-dash-source-state=empty]{color:transparent}
+[data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+.rb-wrap{max-height:28rem;overflow:auto}
+</style>
+<div class="rb">
+  <div class="rb-head">
+    <div>
+      <h1 class="rb-title">Riftbound Market Check</h1>
+      <p class="rb-take" id="take">—</p>
+    </div>
+  </div>
+  <div class="rb-tabs" role="tablist">
+    <button class="rb-tab" role="tab" id="tab-boosters" aria-selected="true" data-tab="p-boosters">Boosters</button>
+    <button class="rb-tab" role="tab" id="tab-cartas" aria-selected="false" data-tab="p-cartas">Cartas raras</button>
+  </div>
+
+  <section id="p-boosters">
+    <div style="margin-bottom:var(--cds-gap-md)">
+      <button class="rb-btn" data-ask="Atualiza os boosters do Riftbound Market Check">↻ Atualizar boosters</button>
+      <div class="rb-hint" id="hint-boosters">Última atualização: <span id="upd-b">—</span></div>
+    </div>
+    <div class="rb-kpis">
+      <div class="rb-card"><div class="rb-note">Pack avulso mais barato</div><div class="rb-big" id="k1" data-source="resumo" data-field="pack_barato_preco" data-row="0">—</div><div class="rb-note" id="k1s" data-source="resumo" data-field="pack_barato_colecao" data-row="0">—</div></div>
+      <div class="rb-card"><div class="rb-note">Caixa mais barata (24 packs)</div><div class="rb-big" id="k2" data-source="resumo" data-field="caixa_barata_preco" data-row="0">—</div><div class="rb-note" id="k2s" data-source="resumo" data-field="caixa_barata_colecao" data-row="0">—</div></div>
+      <div class="rb-card"><div class="rb-note">Melhor valor do set por $ de caixa</div><div class="rb-big" id="k3" data-source="resumo" data-field="melhor_ratio" data-row="0">—</div><div class="rb-note" id="k3s" data-source="resumo" data-field="melhor_ratio_colecao" data-row="0">—</div></div>
+    </div>
+    <div class="rb-grid">
+      <div class="rb-card"><h3>Preço por pack: caixa vs avulso</h3><p class="rb-note">Preço da caixa ÷ 24 comparado com o pack avulso, em euros, hoje</p><div class="rb-chart" id="c-perpack" data-source="por_pack"></div></div>
+      <div class="rb-card"><h3>Evolução do preço da caixa</h3><p class="rb-note">Um ponto por atualização, em euros</p><div class="rb-chart" id="c-hist" data-source="boosters_eur"></div></div>
+    </div>
+    <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Todos os boosters</h3><p class="rb-note">Preços do TCGIndex em USD convertidos a euros com a taxa de referência do BCE (1 € = <span id="rate-b" data-source="cambio" data-field="eur_usd" data-row="0">—</span> $); variação nos últimos 30 dias</p>
+      <div class="rb-wrap"><table id="t-boost" data-source="boosters_atual" data-row-key="colecao,produto"><thead><tr><th data-field="colecao">Coleção</th><th data-field="produto">Produto</th><th class="n" data-field="preco_eur">Preço (€)</th><th class="n" data-field="preco_usd">Original (USD)</th><th class="n" data-field="var_30d">30 dias</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="rb-card"><h3>Valor do set por $ de caixa</h3><p class="rb-note">Soma do preço de todas as cartas do set ÷ preço da caixa. Indicador grosseiro de quanto valor há para tirar, não é o valor esperado de abrir uma caixa</p><div class="rb-chart" id="c-ratio" data-source="valor_vs_caixa"></div></div>
+  </section>
+
+  <section id="p-cartas" hidden>
+    <div style="margin-bottom:var(--cds-gap-md)">
+      <button class="rb-btn" data-ask="Atualiza as cartas raras do Riftbound Market Check">↻ Atualizar cartas</button>
+      <div class="rb-hint">Última atualização: <span id="upd-c">—</span></div>
+    </div>
+    <div style="margin-bottom:var(--cds-gap-md)"><label class="rb-note">Coleção: <select id="f-col"><option value="">Todas</option></select></label></div>
+    <div class="rb-grid">
+      <div class="rb-card"><h3>Cartas mais caras que saem em boosters</h3><p class="rb-note">Preço TCGplayer convertido a euros e preço Cardmarket em euros; promos excluídas</p><div class="rb-chart" id="c-cards" data-source="cartas_atual"></div></div>
+      <div class="rb-card"><h3>Evolução da carta</h3><p class="rb-note">TCGplayer convertido a euros; clica numa barra para ver a carta aqui</p><div class="rb-chart" id="c-cardhist" data-source="cartas_eur"></div></div>
+    </div>
+    <div class="rb-card"><h3>Lista de cartas raras</h3><p class="rb-note">Top 6 por coleção, via riftbound.gg. Cardmarket é o preço real em euros; TCGplayer em € é o preço americano convertido pela taxa do BCE. Nas Signature os dois mercados divergem muito por haver poucas vendas</p>
+      <div class="rb-wrap"><table id="t-cards" data-source="cartas_atual" data-row-key="carta"><thead><tr><th data-field="carta">Carta</th><th data-field="colecao">Coleção</th><th data-field="variante">Variante</th><th class="n" data-field="cm_eur">Cardmarket (€)</th><th class="n" data-field="tcg_eur">TCGplayer em €</th><th class="n" data-field="preco_usd">TCGplayer (USD)</th><th class="n" data-field="var_7d">7 dias</th></tr></thead><tbody></tbody></table></div></div>
+  </section>
+</div>
+<script>
+dash.calc('boosters_eur', {inputs:['boosters','cambio'], title:'Boosters em euros', description:'Preço USD ÷ taxa EUR/USD do BCE em vigor nessa data (a mais recente anterior ou igual).',
+  fn:(boosters, cambio) => { const rs=[...cambio].sort((a,b)=>a.data<b.data?-1:1); const rate=d=>{let x=rs[0]; rs.forEach(c=>{if(c.data<=d) x=c;}); return Number(x.eur_usd);};
+    return boosters.map(r=>({data:r.data,colecao:r.colecao,produto:r.produto,preco_usd:Number(r.preco_usd),preco_eur:Math.round(Number(r.preco_usd)/rate(r.data)*100)/100,var_30d:Number(r.var_30d)})); }});
+dash.calc('boosters_atual', {inputs:['boosters_eur'], title:'Boosters, última data', description:'Linhas dos boosters na data mais recente.',
+  fn:(boosters_eur) => { const m = boosters_eur.reduce((a,r)=>r.data>a?r.data:a,''); return boosters_eur.filter(r=>r.data===m); }});
+dash.calc('por_pack', {inputs:['boosters_atual'], title:'Preço por pack', description:'Caixa ÷ 24 e pack avulso, por coleção.',
+  fn:(boosters_atual) => { const by={}; boosters_atual.forEach(r=>{by[r.colecao]=by[r.colecao]||{colecao:r.colecao}; if(r.produto.startsWith('Caixa')) by[r.colecao].caixa_por_pack=Math.round(r.preco_eur/24*100)/100; else by[r.colecao].pack_avulso=r.preco_eur;}); return Object.values(by); }});
+dash.calc('valor_vs_caixa', {inputs:['sets','boosters_atual'], title:'Valor do set por $ de caixa', description:'Valor total do set ÷ preço da caixa.',
+  fn:(sets, boosters_atual) => sets.map(s=>{ const b=boosters_atual.find(r=>r.colecao===s.colecao && r.produto.startsWith('Caixa')); return {colecao:s.colecao, ratio: b ? Math.round(Number(s.valor_set_usd)/b.preco_usd*10)/10 : null}; }).filter(r=>r.ratio!=null) });
+dash.calc('resumo', {inputs:['boosters_atual','valor_vs_caixa'], title:'Resumo', description:'Pack e caixa mais baratos e melhor rácio valor/caixa.',
+  fn:(boosters_atual, valor_vs_caixa) => { const packs=boosters_atual.filter(r=>!r.produto.startsWith('Caixa')), cx=boosters_atual.filter(r=>r.produto.startsWith('Caixa'));
+    const p=packs.reduce((a,r)=>!a||r.preco_eur<a.preco_eur?r:a,null), c=cx.reduce((a,r)=>!a||r.preco_eur<a.preco_eur?r:a,null), v=valor_vs_caixa.reduce((a,r)=>!a||r.ratio>a.ratio?r:a,null);
+    return [{pack_barato_preco:p&&p.preco_eur, pack_barato_colecao:p&&p.colecao, caixa_barata_preco:c&&c.preco_eur, caixa_barata_colecao:c&&c.colecao, melhor_ratio:v&&v.ratio, melhor_ratio_colecao:v&&v.colecao}]; }});
+dash.calc('cartas_eur', {inputs:['cartas','cambio'], title:'Cartas em euros', description:'Preço TCGplayer convertido a euros com a taxa do BCE, ao lado do preço Cardmarket.',
+  fn:(cartas, cambio) => { const rs=[...cambio].sort((a,b)=>a.data<b.data?-1:1); const rate=d=>{let x=rs[0]; rs.forEach(c=>{if(c.data<=d) x=c;}); return Number(x.eur_usd);};
+    return cartas.map(r=>({data:r.data,carta:r.carta,colecao:r.colecao,variante:r.variante,preco_usd:Number(r.preco_usd),tcg_eur:Math.round(Number(r.preco_usd)/rate(r.data)),cm_eur:r.preco_eur===''||r.preco_eur==null?null:Number(r.preco_eur),var_7d:Number(r.var_7d)})); }});
+dash.calc('cartas_atual', {inputs:['cartas_eur'], title:'Cartas, última data', description:'Linhas das cartas na data mais recente.',
+  fn:(cartas_eur) => { const m = cartas_eur.reduce((a,r)=>r.data>a?r.data:a,''); return cartas_eur.filter(r=>r.data===m); }});
+
+const eurF = new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}), eurF0 = new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0}); const usd = v => eurF.format(v), usd0 = v => eurF0.format(v), dol0 = d3.format('$,.0f'), pct = d3.format('+.1%'), eur0 = v => new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v);
+let selCard = null, filtCol = '';
+
+document.querySelectorAll('.rb-tab').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.rb-tab').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.rb > section').forEach(s => s.hidden = s.id !== b.dataset.tab);
+  dash.setLink(b.dataset.tab);
+}));
+const named = document.getElementById(location.hash.slice(1));
+if (named && named.tagName === 'SECTION') document.querySelector(`[data-tab="${named.id}"]`).click();
+
+document.querySelectorAll('[data-ask]').forEach(b => b.addEventListener('click', async () => {
+  const txt = b.dataset.ask; const hint = b.nextElementSibling;
+  try { await navigator.clipboard.writeText(txt); b.textContent = '✓ Copiado, cola no chat do Claude'; }
+  catch(e) { b.textContent = 'Escreve no chat: "' + txt + '"'; }
+  setTimeout(() => { b.textContent = txt.includes('cartas') ? '↻ Atualizar cartas' : '↻ Atualizar boosters'; }, 4000);
+}));
+
+function tip(box){ let t = box.querySelector('.rb-tip'); if(!t){ t=document.createElement('div'); t.className='rb-tip'; box.appendChild(t);} return t; }
+function failLine(el){ el.innerHTML=''; const d=document.createElement('div'); d.style.cssText='display:flex;align-items:center;justify-content:center;min-height:inherit;gap:.4rem;color:var(--color-fg-muted);font-size:var(--cds-font-size-caption)'; d.innerHTML='<span style="width:.375rem;height:.375rem;border-radius:50%;background:var(--color-bad)"></span>Failed to load'; el.appendChild(d); }
+
+function hbar(el, rows, key, series, fmt, onClick){
+  el.innerHTML=''; const W=el.clientWidth||320, rowH=series.length>1?34:24, m={t:4,r:56,b:4};
+  const svg=d3.select(el).append('svg').attr('width','100%');
+  const lab=svg.append('g'); let lw=0, vw=0; rows.forEach(r=>{const t=lab.append('text').text(r[key]).attr('font-size',12); lw=Math.max(lw,t.node().getComputedTextLength()); t.remove();
+    series.forEach(s=>{ if(r[s.f]==null) return; const u=lab.append('text').text(fmt(r[s.f])).attr('font-size',11); vw=Math.max(vw,u.node().getComputedTextLength()); u.remove(); }); });
+  m.l=Math.min(lw+8, W*0.45); m.r=vw+10; const H=m.t+m.b+rows.length*rowH; svg.attr('viewBox',`0 0 ${W} ${H}`).attr('height',H);
+  const max=d3.max(rows,r=>d3.max(series,s=>r[s.f]||0))||1, x=d3.scaleLinear([0,max],[0,W-m.l-m.r]);
+  const y=d3.scaleBand(rows.map(r=>r[key]),[m.t,H-m.b]).padding(0.2);
+  const tp=tip(el);
+  rows.forEach(r=>{ const g=svg.append('g').style('cursor',onClick?'pointer':null).on('click',()=>onClick&&onClick(r));
+    g.append('text').attr('x',m.l-6).attr('y',y(r[key])+y.bandwidth()/2).attr('dy','.35em').attr('text-anchor','end').attr('font-size',12).attr('fill','var(--color-fg)').text(r[key]).each(function(){ let t=r[key]; while(this.getComputedTextLength()>m.l-8 && t.length>4){ t=t.slice(0,-2); this.textContent=t+'…'; } }).append('title').text(r[key]);
+    const bh=y.bandwidth()/series.length;
+    series.forEach((s,i)=>{ const v=r[s.f]; if(v==null) return; const yy=y(r[key])+i*bh;
+      g.append('rect').attr('x',m.l).attr('y',yy+1).attr('height',Math.max(bh-2,2)).attr('width',Math.max(x(v),1)).attr('rx',4).attr('fill',s.c)
+        .on('mousemove',ev=>{const p=d3.pointer(ev,el); tp.style.display='block'; tp.style.left=Math.min(p[0]+10,W-150)+'px'; tp.style.top=(p[1]+10)+'px'; tp.textContent=`${r[key]} · ${s.n}: ${fmt(v)}`;}).on('mouseleave',()=>tp.style.display='none');
+      g.append('text').attr('x',m.l+x(v)+4).attr('y',yy+bh/2).attr('dy','.35em').attr('font-size',11).attr('fill','var(--color-fg-muted)').text(fmt(v)); }); });
+  if(series.length>1){ const lg=d3.select(el).append('div').style('display','flex').style('gap','1rem').style('font-size','var(--cds-font-size-caption)').style('color','var(--color-fg-muted)').style('margin-top','.5rem');
+    series.forEach(s=>lg.append('span').html(`<span style="display:inline-block;width:.6rem;height:.6rem;border-radius:2px;background:${s.c};margin-right:.3rem"></span>`).append('span').text(s.n)); }
+}
+
+function lines(el, rows, groupKey, fmt, vf){
+  el.innerHTML=''; const W=el.clientWidth||320, H=240, m={t:10,r:90,b:24,l:56};
+  const svg=d3.select(el).append('svg').attr('width','100%').attr('viewBox',`0 0 ${W} ${H}`).attr('height',H);
+  rows=rows.map(r=>({...r,d:new Date(r.data),v:Number(r[vf])}));
+  let ext=d3.extent(rows,r=>r.d); if(+ext[0]===+ext[1]) ext=[d3.utcDay.offset(ext[0],-3),d3.utcDay.offset(ext[1],3)];
+  const x=d3.scaleUtc(ext,[m.l,W-m.r]), y=d3.scaleLinear([0,d3.max(rows,r=>r.v)*1.1],[H-m.b,m.t]).nice();
+  svg.append('g').attr('transform',`translate(0,${H-m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(d3.utcFormat('%-d %b'))).attr('font-size',null).attr('font-family',null).call(g=>{g.select('.domain').attr('stroke','var(--cds-chart-axis)');g.selectAll('text').attr('fill','var(--color-fg-muted)');g.selectAll('line').remove();});
+  svg.append('g').attr('transform',`translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(usd0).tickSize(-(W-m.l-m.r))).attr('font-size',null).attr('font-family',null).call(g=>{g.select('.domain').remove();g.selectAll('line').attr('stroke','var(--cds-chart-grid)');g.selectAll('text').attr('fill','var(--color-fg-muted)');});
+  const groups=d3.groups(rows,r=>r[groupKey]); const tp=tip(el);
+  const ends=[];
+  groups.forEach(([k,rs],i)=>{ rs.sort((a,b)=>a.d-b.d); const c=dash.colors[i%dash.colors.length];
+    svg.append('path').datum(rs).attr('fill','none').attr('stroke',c).attr('stroke-width',2).attr('stroke-linecap','round').attr('stroke-linejoin','round').attr('d',d3.line(r=>x(r.d),r=>y(r.v)));
+    svg.selectAll(null).data(rs).join('circle').attr('cx',r=>x(r.d)).attr('cy',r=>y(r.v)).attr('r',4).attr('fill',c)
+      .on('mousemove',(ev,r)=>{const p=d3.pointer(ev,el); tp.style.display='block'; tp.style.left=Math.min(p[0]+10,W-170)+'px'; tp.style.top=(p[1]+10)+'px'; tp.textContent=`${d3.utcFormat('%-d %b')(r.d)} · ${k}: ${fmt(r.v)}`;}).on('mouseleave',()=>tp.style.display='none');
+    const last=rs[rs.length-1]; ends.push({k,c,y:y(last.v),x:x(last.d)}); });
+  ends.sort((a,b)=>a.y-b.y); for(let i=1;i<ends.length;i++) if(ends[i].y-ends[i-1].y<13) ends[i].y=ends[i-1].y+13;
+  ends.forEach(e=>svg.append('text').attr('x',e.x+8).attr('y',e.y).attr('dy','.35em').attr('font-size',11).attr('fill',e.c).text(e.k));
+}
+
+function cls(v){ return v>0?'up':v<0?'down':''; }
+
+function render(){
+  const B=dash.data('boosters'), BA=dash.data('boosters_atual'), PP=dash.data('por_pack'), VR=dash.data('valor_vs_caixa'), R=dash.data('resumo'), C=dash.data('cartas'), CA=dash.data('cartas_atual');
+  // KPIs
+  const r0 = R.status==='ok' && R.data[0];
+  document.getElementById('k1').textContent = r0 ? usd(r0.pack_barato_preco) : '—';
+  document.getElementById('k1s').textContent = r0 ? r0.pack_barato_colecao : '—';
+  document.getElementById('k2').textContent = r0 ? usd(r0.caixa_barata_preco) : '—';
+  document.getElementById('k2s').textContent = r0 ? r0.caixa_barata_colecao : '—';
+  document.getElementById('k3').textContent = r0 ? r0.melhor_ratio + '×' : '—';
+  document.getElementById('k3s').textContent = r0 ? r0.melhor_ratio_colecao : '—';
+  document.getElementById('take').textContent = r0 ? `Hoje, o pack mais barato é ${r0.pack_barato_colecao} e a coleção com mais valor em cartas por dólar de caixa é ${r0.melhor_ratio_colecao}.` : '—';
+  const CB=dash.data('cambio'); document.getElementById('rate-b').textContent = CB.status==='ok' ? String(Number(CB.data[0].eur_usd)) : '—';
+  document.getElementById('upd-b').textContent = B.status==='ok' ? d3.max(B.data,r=>r.data) : '—';
+  document.getElementById('upd-c').textContent = C.status==='ok' ? d3.max(C.data,r=>r.data) : '—';
+
+  const pp=document.getElementById('c-perpack');
+  if(PP.status==='ok') hbar(pp, [...PP.data].sort((a,b)=>a.caixa_por_pack-b.caixa_por_pack), 'colecao', [{f:'caixa_por_pack',n:'Caixa ÷ 24',c:dash.colors[0]},{f:'pack_avulso',n:'Pack avulso',c:dash.colors[1]}], usd); else if(PP.status==='error') failLine(pp); else pp.innerHTML='';
+  const vr=document.getElementById('c-ratio');
+  if(VR.status==='ok') hbar(vr, [...VR.data].sort((a,b)=>b.ratio-a.ratio), 'colecao', [{f:'ratio',n:'Valor/caixa',c:dash.colors[0]}], v=>v+'×'); else if(VR.status==='error') failLine(vr); else vr.innerHTML='';
+  const h=document.getElementById('c-hist');
+  const BE=dash.data('boosters_eur'); if(BE.status==='ok') lines(h, BE.data.filter(r=>r.produto.startsWith('Caixa')), 'colecao', usd, 'preco_eur'); else if(BE.status==='error'||B.status==='error') failLine(h); else h.innerHTML='';
+
+  const tb=document.querySelector('#t-boost tbody'); tb.innerHTML='';
+  if(BA.status==='ok') [...BA.data].sort((a,b)=>a.produto.localeCompare(b.produto)||a.preco_eur-b.preco_eur).forEach(r=>{ const tr=tb.insertRow();
+    tr.insertCell().textContent=r.colecao; tr.insertCell().textContent=r.produto;
+    const c1=tr.insertCell(); c1.className='n'; c1.textContent=usd(r.preco_eur);
+    const c0=tr.insertCell(); c0.className='n'; c0.style.color='var(--color-fg-muted)'; c0.textContent=d3.format('$,.2f')(r.preco_usd);
+    const c2=tr.insertCell(); c2.className='n '+cls(r.var_30d); c2.textContent=pct(r.var_30d); });
+
+  // Cartas
+  const sel=document.getElementById('f-col');
+  if(CA.status==='ok' && sel.options.length===1) [...new Set(CA.data.map(r=>r.colecao))].sort().forEach(c=>{const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);});
+  const rows = CA.status==='ok' ? CA.data.filter(r=>!filtCol||r.colecao===filtCol).sort((a,b)=>b.tcg_eur-a.tcg_eur) : [];
+  if(!selCard && rows.length) selCard=rows[0].carta;
+  const cc=document.getElementById('c-cards');
+  if(CA.status==='ok') hbar(cc, rows, 'carta', [{f:'tcg_eur',n:'TCGplayer em €',c:dash.colors[0]},{f:'cm_eur',n:'Cardmarket (€)',c:dash.colors[1]}], usd0, r=>{selCard=r.carta; drawCardHist();}); else if(CA.status==='error') failLine(cc); else cc.innerHTML='';
+  drawCardHist();
+  const tc=document.querySelector('#t-cards tbody'); tc.innerHTML='';
+  rows.forEach(r=>{ const tr=tc.insertRow(); tr.insertCell().textContent=r.carta; tr.insertCell().textContent=r.colecao; tr.insertCell().textContent=r.variante;
+    const e=tr.insertCell(); e.className='n'; e.textContent=r.cm_eur==null?'sem oferta':usd0(r.cm_eur);
+    const a=tr.insertCell(); a.className='n'; a.textContent=usd0(r.tcg_eur);
+    const u=tr.insertCell(); u.className='n'; u.style.color='var(--color-fg-muted)'; u.textContent=dol0(r.preco_usd);
+    const b=tr.insertCell(); b.className='n '+cls(r.var_7d); b.textContent=pct(r.var_7d); });
+
+  function drawCardHist(){ const el=document.getElementById('c-cardhist');
+    const CE=dash.data('cartas_eur'); if(CE.status==='ok' && selCard) lines(el, CE.data.filter(r=>r.carta===selCard), 'carta', usd0, 'tcg_eur'); else if(C.status==='error') failLine(el); else el.innerHTML=''; }
+}
+dash.onData(render);
+document.getElementById('f-col').addEventListener('change', e => { filtCol=e.target.value; selCard=null; render(); });
+</script>
+
+<p class="rb-foot">Projeto pessoal de fã, sem ligação à Riot Games. Preços: TCGIndex, riftbound.gg (TCGplayer e Cardmarket); câmbio: BCE. Valores indicativos.</p>
+</div>
+</body>
+</html>

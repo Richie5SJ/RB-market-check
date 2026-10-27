@@ -1,0 +1,11 @@
+data,colecao,produto,preco_usd,var_30d,fonte
+2026-10-27,Origins,Caixa (24 packs),223.06,-0.043,TCGIndex
+2026-10-27,Spiritforged,Caixa (24 packs),155.58,-0.140,TCGIndex
+2026-10-27,Unleashed,Caixa (24 packs),148.44,-0.139,TCGIndex
+2026-10-27,Vendetta,Caixa (24 packs),129.51,-0.101,TCGIndex
+2026-10-27,Radiance,Caixa (24 packs),130.63,-0.265,TCGIndex
+2026-10-27,Origins,Pack avulso,12.46,-0.008,TCGIndex
+2026-10-27,Spiritforged,Pack avulso,8.85,-0.123,TCGIndex
+2026-10-27,Unleashed,Pack avulso,7.89,-0.005,TCGIndex
+2026-10-27,Vendetta,Pack avulso,6.78,-0.069,TCGIndex
+2026-10-27,Radiance,Pack avulso,6.81,0.013,TCGIndex
