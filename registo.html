@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedir acesso à coleção</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{--fg:#1f1e1d;--muted:#6b6862;--bg:#faf9f5;--panel:#fff;--line:#e6e3da;--ok:#2f7d4f;--bad:#b3372f;--accent:#3a6fc4}
+@media (prefers-color-scheme: dark){:root{--fg:#ecebe6;--muted:#a3a097;--bg:#1d1c1a;--panel:#262522;--line:#3a3833;--ok:#6cc08b;--bad:#ec7a70;--accent:#7aa7e8}}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif}
+main{max-width:34rem;margin:0 auto;padding:32px 16px}
+h1{font-family:"Source Serif 4",Georgia,serif;font-weight:400;font-size:1.75rem;margin:0 0 .5rem}
+p{color:var(--muted);line-height:1.5;font-size:.9375rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem;margin-top:1rem}
+label{display:block;font-size:.8125rem;color:var(--muted);margin:.75rem 0 .25rem}
+input,textarea{width:100%;box-sizing:border-box;font:inherit;padding:.5rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+textarea{height:7rem;font-family:ui-monospace,monospace;font-size:.75rem}
+button{margin-top:1rem;font:inherit;padding:.5rem 1rem;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.msg{font-size:.8125rem;margin-top:.5rem;min-height:1.2em}
+.bad{color:var(--bad)}.ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Pedir acesso à coleção</h1>
+  <p>Escolhe uma palavra-passe só tua. Ela nunca sai deste navegador: a página gera um código, e é esse código que envias ao dono da coleção. A partir daí, abres a coleção no RB Market Check com a tua palavra-passe.</p>
+  <div class="card">
+    <label for="nome">O teu nome (para o dono saber quem és)</label>
+    <input id="nome" autocomplete="off" maxlength="40">
+    <label for="p1">Palavra-passe (pelo menos 12 caracteres)</label>
+    <input id="p1" type="password" autocomplete="new-password">
+    <label for="p2">Repete a palavra-passe</label>
+    <input id="p2" type="password" autocomplete="new-password">
+    <button id="gerar">Gerar código</button>
+    <div class="msg" id="msg"></div>
+  </div>
+  <div class="card" id="saida" hidden>
+    <label for="codigo">O teu código: copia e envia-o ao dono da coleção</label>
+    <textarea id="codigo" readonly></textarea>
+    <button id="copiar">Copiar código</button>
+    <div class="msg ok" id="msg2"></div>
+    <p>Guarda bem a palavra-passe: se a perderes, tens de pedir acesso outra vez com um código novo.</p>
+  </div>
+</main>
+<script src="cripto.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+$('gerar').addEventListener('click', async ()=>{
+  const nome=$('nome').value.trim(), p1=$('p1').value, p2=$('p2').value, m=$('msg'); m.className='msg bad';
+  if(!nome){ m.textContent='Escreve o teu nome.'; return; }
+  if(p1.length<12){ m.textContent='A palavra-passe tem de ter pelo menos 12 caracteres.'; return; }
+  if(p1!==p2){ m.textContent='As palavras-passe não coincidem.'; return; }
+  $('gerar').disabled=true; m.className='msg'; m.textContent='A gerar… (demora uns segundos)';
+  try{ const c=await RBC.registar(nome,p1); $('codigo').value=c; $('saida').hidden=false; m.textContent=''; $('p1').value=''; $('p2').value=''; }
+  catch(e){ m.className='msg bad'; m.textContent='Não foi possível gerar o código neste navegador.'; }
+  $('gerar').disabled=false;
+});
+$('copiar').addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText($('codigo').value); $('msg2').textContent='Copiado.'; }catch(e){ $('codigo').select(); $('msg2').textContent='Seleciona e copia manualmente.'; } });
+</script>
+</body>
+</html>

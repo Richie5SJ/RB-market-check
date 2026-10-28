@@ -65,6 +65,16 @@ window.dash=(function(){
 [data-dash-source-state=empty]{color:transparent}
 [data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
 .rb-wrap{max-height:28rem;overflow:auto}
+.mc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:var(--cds-gap-md)}
+.mc-item{display:flex;flex-direction:column;gap:var(--cds-gap-xs)}
+.mc-imgwrap{position:relative}
+.mc-item img{width:100%;aspect-ratio:63/88;object-fit:cover;border-radius:6px;border:1px solid var(--color-border-line);background:var(--color-bg)}
+.mc-item .nm{font-size:var(--cds-font-size-caption);font-weight:var(--cds-font-weight-medium);line-height:1.25}
+.mc-item .pr{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);font-variant-numeric:tabular-nums}
+.mc-qty{position:absolute;top:6px;right:6px;background:var(--color-fg);color:var(--color-bg);font-size:var(--cds-font-size-caption);border-radius:999px;padding:0 .45rem}
+.mc-lock{max-width:26rem}
+.mc-lock input{width:100%;box-sizing:border-box;font:inherit;padding:var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);margin:var(--cds-gap-sm) 0}
+.mc-lock a{color:inherit}
 </style>
 <div class="rb">
   <div class="rb-head">
@@ -76,6 +86,7 @@ window.dash=(function(){
   <div class="rb-tabs" role="tablist">
     <button class="rb-tab" role="tab" id="tab-boosters" aria-selected="true" data-tab="p-boosters">Boosters</button>
     <button class="rb-tab" role="tab" id="tab-cartas" aria-selected="false" data-tab="p-cartas">Cartas raras</button>
+    <button class="rb-tab" role="tab" id="tab-colecao" aria-selected="false" data-tab="p-colecao">🔒 A minha coleção</button>
   </div>
 
   <section id="p-boosters">
@@ -107,6 +118,29 @@ window.dash=(function(){
     </div>
     <div class="rb-card"><h3>Lista de cartas raras</h3><p class="rb-note">Top 6 por coleção, via riftbound.gg. Cardmarket é o preço real em euros; TCGplayer em € é o preço americano convertido pela taxa do BCE. Nas Signature os dois mercados divergem muito por haver poucas vendas</p>
       <div class="rb-wrap"><table id="t-cards" data-source="cartas_atual" data-row-key="carta"><thead><tr><th data-field="carta">Carta</th><th data-field="colecao">Coleção</th><th data-field="variante">Variante</th><th class="n" data-field="cm_eur">Cardmarket (€)</th><th class="n" data-field="tcg_eur">TCGplayer em €</th><th class="n" data-field="preco_usd">TCGplayer (USD)</th><th class="n" data-field="var_7d">7 dias</th></tr></thead><tbody></tbody></table></div></div>
+  </section>
+
+  <section id="p-colecao" hidden>
+    <div class="rb-card mc-lock" id="mc-lock">
+      <h3>Coleção privada</h3>
+      <p class="rb-note">Os dados estão encriptados. Introduz a tua palavra-passe para os ver; nada é enviado para lado nenhum.</p>
+      <input id="mc-pass" type="password" autocomplete="current-password" placeholder="Palavra-passe">
+      <button class="rb-btn" id="mc-abrir">Abrir coleção</button>
+      <div class="rb-note" id="mc-msg"></div>
+      <p class="rb-note">Ainda não tens acesso? <a href="registo.html">Pede acesso aqui</a>.</p>
+    </div>
+    <div id="mc-conteudo" hidden>
+      <p class="rb-take" style="margin-bottom:var(--cds-gap-md)">Olá, <span id="mc-quem"></span>. Preços de <span id="mc-data"></span>.</p>
+      <div class="rb-kpis">
+        <div class="rb-card"><div class="rb-note">Valor da coleção</div><div class="rb-big" id="mc-tot">—</div><div class="rb-note">ao preço de mercado</div></div>
+        <div class="rb-card"><div class="rb-note">Cartas</div><div class="rb-big" id="mc-n">—</div><div class="rb-note"><span id="mc-u">—</span> diferentes</div></div>
+        <div class="rb-card"><div class="rb-note">Carta mais valiosa</div><div class="rb-big" id="mc-topv">—</div><div class="rb-note" id="mc-topn">—</div></div>
+      </div>
+      <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Galeria</h3><p class="rb-note">Imagens do riftbound.gg, ordenadas pelo valor; o número no canto é a quantidade</p><div class="mc-grid" id="mc-grid"></div></div>
+      <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Evolução do valor da coleção</h3><p class="rb-note">Um ponto por atualização de preços, em euros</p><div class="rb-chart" id="mc-hist" style="min-height:200px"></div></div>
+      <div class="rb-card"><h3>Lista completa</h3><p class="rb-note">Preço Cardmarket em euros; quando não há oferta, preço TCGplayer convertido com a taxa do BCE</p>
+        <div class="rb-wrap"><table id="t-col"><thead><tr><th>Carta</th><th>Raridade</th><th class="n">Qtd</th><th class="n">Preço (€)</th><th class="n">Total (€)</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
   </section>
 </div>
 <script>
@@ -240,6 +274,44 @@ function render(){
 }
 dash.onData(render);
 document.getElementById('f-col').addEventListener('change', e => { filtCol=e.target.value; selCard=null; render(); });
+</script>
+<script src="cripto.js"></script>
+<script>
+(function(){
+  let col=null; const $=id=>document.getElementById(id);
+  function desenhar(){
+    if(!col) return; const d=col.dados, eu=v=>usd(v);
+    $('mc-quem').textContent=col.nome; $('mc-data').textContent=d.atualizado;
+    $('mc-tot').textContent=eu(d.resumo.total_eur); $('mc-n').textContent=String(d.resumo.cartas); $('mc-u').textContent=String(d.resumo.unicas);
+    $('mc-topv').textContent=eu(d.resumo.top_eur); $('mc-topn').textContent=d.resumo.top_carta;
+    const ord=[...d.cartas].sort((a,b)=>(b.total_eur||0)-(a.total_eur||0));
+    const g=$('mc-grid'); g.replaceChildren();
+    ord.forEach(r=>{ const it=document.createElement('div'); it.className='mc-item'; const w=document.createElement('div'); w.className='mc-imgwrap';
+      const im=document.createElement('img'); im.alt=r.carta; im.loading='lazy'; if(String(r.foto||'').startsWith('data:image/')) im.src=r.foto; w.appendChild(im);
+      if(r.qtd>1){ const q=document.createElement('span'); q.className='mc-qty'; q.textContent='×'+r.qtd; w.appendChild(q); }
+      const nm=document.createElement('div'); nm.className='nm'; nm.textContent=r.carta;
+      const pr=document.createElement('div'); pr.className='pr'; pr.textContent=r.preco_eur==null?'sem preço':eu(r.preco_eur)+(r.qtd>1?' · total '+eu(r.total_eur):'');
+      it.append(w,nm,pr); g.appendChild(it); });
+    if($('p-colecao').hidden===false) lines($('mc-hist'), d.historico, 'serie', usd, 'total_eur');
+    const tb=document.querySelector('#t-col tbody'); tb.innerHTML='';
+    ord.forEach(r=>{ const tr=tb.insertRow(); tr.insertCell().textContent=r.carta; tr.insertCell().textContent=r.raridade;
+      [String(r.qtd), r.preco_eur==null?'—':eu(r.preco_eur), r.total_eur==null?'—':eu(r.total_eur)].forEach(t=>{ const c=tr.insertCell(); c.className='n'; c.textContent=t; }); });
+  }
+  async function abrir(){
+    const m=$('mc-msg'); m.textContent='A abrir… (demora uns segundos)'; $('mc-abrir').disabled=true;
+    try{
+      const [acesso,cofre]=await Promise.all(['data/acesso.json','data/cofre.json'].map(u=>fetch(u+'?v='+Date.now()).then(r=>{ if(!r.ok) throw new Error('sem'); return r.json(); })));
+      const r=await RBC.abrir($('mc-pass').value, acesso, cofre);
+      if(!r){ m.textContent='Palavra-passe errada, ou ainda não tens acesso.'; }
+      else { col=r; $('mc-pass').value=''; m.textContent=''; $('mc-lock').hidden=true; $('mc-conteudo').hidden=false; desenhar(); }
+    }catch(e){ m.textContent='A coleção ainda não foi publicada para ninguém.'; }
+    $('mc-abrir').disabled=false;
+  }
+  $('mc-abrir').addEventListener('click', abrir);
+  $('mc-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') abrir(); });
+  document.getElementById('tab-colecao').addEventListener('click', ()=>setTimeout(desenhar,0));
+  let t; addEventListener('resize',()=>{ clearTimeout(t); t=setTimeout(desenhar,200); });
+})();
 </script>
 
 <p class="rb-foot">Projeto pessoal de fã, sem ligação à Riot Games. Preços: TCGIndex, riftbound.gg (TCGplayer e Cardmarket); câmbio: BCE. Valores indicativos.</p>
