@@ -4,11 +4,11 @@
   python3 tools/encriptar.py adicionar RBMC1.xxxxx      # acrescenta uma pessoa (código da página registo.html)
   python3 tools/encriptar.py remover "Nome"             # retira o acesso a uma pessoa
   python3 tools/encriptar.py listar
-  python3 tools/encriptar.py publicar colecao.json      # encripta a coleção para todas as pessoas
+  python3 tools/encriptar.py publicar "Nome" colecao.json  # encripta a coleção DESSA pessoa, só para ela
 
 A coleção em claro NUNCA vai para o repositório: só data/cofre.json (encriptado) e
 data/acesso.json (nomes + chaves públicas + chaves privadas encriptadas com a palavra-passe de cada um).
-Cada publicação usa uma chave nova, por isso quem for removido deixa de abrir as versões seguintes.
+Cada pessoa tem a sua própria coleção, encriptada só para ela, com uma chave nova a cada publicação.
 """
 import base64, json, os, sys
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -55,28 +55,44 @@ def remover(nome):
     antes = len(a['pessoas'])
     a['pessoas'] = [p for p in a['pessoas'] if p['nome'] != nome]
     gravar(ACESSO, a)
-    print('Removidos:', antes - len(a['pessoas']), '— faltam', len(a['pessoas']), '(publica de novo para mudar a chave)')
+    limpar()
+    print('Removidos:', antes - len(a['pessoas']), '— faltam', len(a['pessoas']))
 
 
-def publicar(caminho):
+def publicar(nome, caminho):
     a = ler_acesso()
-    if not a['pessoas']:
-        sys.exit('Ainda não há ninguém com acesso.')
+    pessoa = next((p for p in a['pessoas'] if p['nome'] == nome), None)
+    if not pessoa:
+        sys.exit('Essa pessoa não tem acesso: ' + nome)
+    cofre = json.load(open(COFRE)) if os.path.exists(COFRE) else {}
+    if cofre.get('v') != 2:
+        cofre = {'v': 2, 'colecoes': {}}
     dados = open(caminho, 'rb').read()
     chave = AESGCM.generate_key(bit_length=256)
     iv = os.urandom(12)
-    cofre = {'v': 1, 'iv': b64(iv), 'dados': b64(AESGCM(chave).encrypt(iv, dados, None)), 'chaves': {}}
-    for p in a['pessoas']:
-        pub = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), unb64(p['pub']))
-        eph = ec.generate_private_key(ec.SECP256R1())
-        seg = eph.exchange(ec.ECDH(), pub)
-        kek = HKDF(algorithm=hashes.SHA256(), length=32, salt=b'rbmc-salt-v1', info=b'rbmc-v1').derive(seg)
-        wiv = os.urandom(12)
-        cofre['chaves'][p['pub']] = {
-            'eph': b64(eph.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)),
-            'iv': b64(wiv), 'k': b64(AESGCM(kek).encrypt(wiv, chave, None))}
+    pub = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), unb64(pessoa['pub']))
+    eph = ec.generate_private_key(ec.SECP256R1())
+    seg = eph.exchange(ec.ECDH(), pub)
+    kek = HKDF(algorithm=hashes.SHA256(), length=32, salt=b'rbmc-salt-v1', info=b'rbmc-v1').derive(seg)
+    wiv = os.urandom(12)
+    cofre['colecoes'][pessoa['pub']] = {
+        'eph': b64(eph.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)),
+        'iv': b64(wiv), 'k': b64(AESGCM(kek).encrypt(wiv, chave, None)),
+        'div': b64(iv), 'dados': b64(AESGCM(chave).encrypt(iv, dados, None))}
+    validos = {p['pub'] for p in a['pessoas']}
+    cofre['colecoes'] = {k: v for k, v in cofre['colecoes'].items() if k in validos}
     gravar(COFRE, cofre)
-    print('Cofre publicado para', len(a['pessoas']), 'pessoa(s).')
+    print('Coleção de', nome, 'publicada. Coleções no cofre:', len(cofre['colecoes']))
+
+
+def limpar():
+    a = ler_acesso()
+    if os.path.exists(COFRE):
+        cofre = json.load(open(COFRE))
+        if cofre.get('v') == 2:
+            validos = {p['pub'] for p in a['pessoas']}
+            cofre['colecoes'] = {k: v for k, v in cofre['colecoes'].items() if k in validos}
+            gravar(COFRE, cofre)
 
 
 if __name__ == '__main__':
@@ -84,5 +100,5 @@ if __name__ == '__main__':
     if acao == 'adicionar': adicionar(sys.argv[2].strip())
     elif acao == 'remover': remover(sys.argv[2])
     elif acao == 'listar': print('\n'.join(p['nome'] for p in ler_acesso()['pessoas']) or '(ninguém)')
-    elif acao == 'publicar': publicar(sys.argv[2])
+    elif acao == 'publicar': publicar(sys.argv[2], sys.argv[3])
     else: print(__doc__)

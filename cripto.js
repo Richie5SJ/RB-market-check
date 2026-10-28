@@ -1,7 +1,7 @@
 // Encriptação da coleção — tudo corre no navegador, nada é enviado para lado nenhum.
 // Cada pessoa tem um par de chaves ECDH P-256. A chave privada fica guardada encriptada
 // com a palavra-passe dessa pessoa (PBKDF2 → AES-GCM). A coleção é encriptada com uma
-// chave nova a cada atualização, e essa chave é embrulhada para a chave pública de cada pessoa.
+// chave nova a cada atualização. Cada pessoa tem a sua própria coleção, embrulhada só para a sua chave pública.
 window.RBC = (function () {
   const te = new TextEncoder(), td = new TextDecoder();
   const ITER = 600000;
@@ -29,21 +29,21 @@ window.RBC = (function () {
   // Desbloqueio: tenta a palavra-passe em cada entrada da lista de acesso.
   async function abrir(passe, acesso, cofre) {
     for (const e of acesso.pessoas || []) {
-      if (!cofre.chaves || !cofre.chaves[e.pub]) continue;
+      const w = (cofre.colecoes || {})[e.pub];
+      if (!w) continue;
       let privRaw;
       try {
         const k = await chaveDaPasse(passe, unb64(e.salt));
         privRaw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(e.iv) }, k, unb64(e.priv));
       } catch (_) { continue; }
       const priv = await crypto.subtle.importKey('pkcs8', privRaw, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
-      const eph = await crypto.subtle.importKey('raw', unb64(cofre.chaves[e.pub].eph), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+      const eph = await crypto.subtle.importKey('raw', unb64(w.eph), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
       const seg = await crypto.subtle.deriveBits({ name: 'ECDH', public: eph }, priv, 256);
       const hk = await crypto.subtle.importKey('raw', seg, 'HKDF', false, ['deriveKey']);
       const kek = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: HKDF_SALT, info: HKDF_INFO }, hk, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
-      const w = cofre.chaves[e.pub];
       const dk = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(w.iv) }, kek, unb64(w.k));
       const chave = await crypto.subtle.importKey('raw', dk, 'AES-GCM', false, ['decrypt']);
-      const dados = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(cofre.iv) }, chave, unb64(cofre.dados));
+      const dados = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(w.div) }, chave, unb64(w.dados));
       return { nome: e.nome, dados: JSON.parse(td.decode(dados)) };
     }
     return null;
