@@ -72,6 +72,7 @@ window.dash=(function(){
 .mc-item .nm{font-size:var(--cds-font-size-caption);font-weight:var(--cds-font-weight-medium);line-height:1.25}
 .mc-item .pr{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);font-variant-numeric:tabular-nums}
 .mc-qty{position:absolute;top:6px;right:6px;background:var(--color-fg);color:var(--color-bg);font-size:var(--cds-font-size-caption);border-radius:999px;padding:0 .45rem}
+.mc-up{color:var(--color-ok)}.mc-down{color:var(--color-bad)}.mc-arrow{font-weight:var(--cds-font-weight-medium);margin-left:.25rem}
 .mc-lock{max-width:26rem}
 .mc-lock input{width:100%;box-sizing:border-box;font:inherit;padding:var(--cds-pad-sm);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);margin:var(--cds-gap-sm) 0}
 .mc-lock a{color:inherit}
@@ -136,10 +137,10 @@ window.dash=(function(){
         <div class="rb-card"><div class="rb-note">Cartas</div><div class="rb-big" id="mc-n">—</div><div class="rb-note"><span id="mc-u">—</span> diferentes</div></div>
         <div class="rb-card"><div class="rb-note">Carta mais valiosa</div><div class="rb-big" id="mc-topv">—</div><div class="rb-note" id="mc-topn">—</div></div>
       </div>
-      <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Galeria</h3><p class="rb-note">Imagens do riftbound.gg, ordenadas pelo valor; o número no canto é a quantidade</p><div class="mc-grid" id="mc-grid"></div></div>
+      <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Galeria</h3><p class="rb-note">Imagens do riftbound.gg, ordenadas pelo valor; o número no canto é a quantidade. ▲ verde subiu, ▼ vermelho desceu desde a atualização anterior</p><div class="mc-grid" id="mc-grid"></div></div>
       <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Evolução do valor da coleção</h3><p class="rb-note">Um ponto por atualização de preços, em euros</p><div class="rb-chart" id="mc-hist" style="min-height:200px"></div></div>
       <div class="rb-card"><h3>Lista completa</h3><p class="rb-note">Preço Cardmarket em euros; quando não há oferta, preço TCGplayer convertido com a taxa do BCE</p>
-        <div class="rb-wrap"><table id="t-col"><thead><tr><th>Carta</th><th>Raridade</th><th class="n">Qtd</th><th class="n">Preço (€)</th><th class="n">Total (€)</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="rb-wrap"><table id="t-col"><thead><tr><th>Carta</th><th>Raridade</th><th class="n">Qtd</th><th class="n">Preço (€)</th><th class="n">Total (€)</th><th class="n">Variação</th></tr></thead><tbody></tbody></table></div></div>
     </div>
   </section>
 </div>
@@ -279,6 +280,7 @@ document.getElementById('f-col').addEventListener('change', e => { filtCol=e.tar
 <script>
 (function(){
   let col=null; const $=id=>document.getElementById(id);
+  function seta(r,comValor){ if(r.variacao_eur==null||r.variacao_eur===0) return null; const s=document.createElement('span'); const up=r.variacao_eur>0; s.className='mc-arrow '+(up?'mc-up':'mc-down'); s.textContent=(up?'▲':'▼')+(comValor?' '+(up?'+':'−')+usd(Math.abs(r.variacao_eur)):''); s.title=(up?'Subiu ':'Desceu ')+usd(Math.abs(r.variacao_eur)); return s; }
   function desenhar(){
     if(!col) return; const d=col.dados, eu=v=>usd(v);
     $('mc-quem').textContent=col.nome; $('mc-data').textContent=d.atualizado;
@@ -291,11 +293,13 @@ document.getElementById('f-col').addEventListener('change', e => { filtCol=e.tar
       if(r.qtd>1){ const q=document.createElement('span'); q.className='mc-qty'; q.textContent='×'+r.qtd; w.appendChild(q); }
       const nm=document.createElement('div'); nm.className='nm'; nm.textContent=r.carta;
       const pr=document.createElement('div'); pr.className='pr'; pr.textContent=r.preco_eur==null?'sem preço':eu(r.preco_eur)+(r.qtd>1?' · total '+eu(r.total_eur):'');
+      const ar=seta(r); if(ar) pr.appendChild(ar);
       it.append(w,nm,pr); g.appendChild(it); });
     if($('p-colecao').hidden===false && d.historico.length) lines($('mc-hist'), d.historico, 'serie', usd, 'total_eur');
     const tb=document.querySelector('#t-col tbody'); tb.innerHTML='';
     ord.forEach(r=>{ const tr=tb.insertRow(); tr.insertCell().textContent=r.carta; tr.insertCell().textContent=r.raridade;
-      [String(r.qtd), r.preco_eur==null?'—':eu(r.preco_eur), r.total_eur==null?'—':eu(r.total_eur)].forEach(t=>{ const c=tr.insertCell(); c.className='n'; c.textContent=t; }); });
+      [String(r.qtd), r.preco_eur==null?'—':eu(r.preco_eur), r.total_eur==null?'—':eu(r.total_eur)].forEach(t=>{ const c=tr.insertCell(); c.className='n'; c.textContent=t; });
+      const v=tr.insertCell(); v.className='n'; const ar=seta(r,true); if(ar) v.appendChild(ar); else v.textContent='—'; });
   }
   async function abrir(){
     const m=$('mc-msg'); m.textContent='A abrir… (demora uns segundos)'; $('mc-abrir').disabled=true;
