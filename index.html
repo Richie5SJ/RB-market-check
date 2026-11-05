@@ -140,7 +140,7 @@ window.dash=(function(){
       <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Galeria</h3><p class="rb-note">Imagens do riftbound.gg, ordenadas pelo valor; o número no canto é a quantidade. ▲ verde subiu, ▼ vermelho desceu desde a atualização anterior</p><div class="mc-grid" id="mc-grid"></div></div>
       <div class="rb-card" style="margin-bottom:var(--cds-gap-md)"><h3>Evolução do valor da coleção</h3><p class="rb-note">Um ponto por atualização de preços, em euros</p><div class="rb-chart" id="mc-hist" style="min-height:200px"></div></div>
       <div class="rb-card"><h3>Lista completa</h3><p class="rb-note">Preço Cardmarket em euros; quando não há oferta, preço TCGplayer convertido com a taxa do BCE</p>
-        <div class="rb-wrap"><table id="t-col"><thead><tr><th>Carta</th><th>Raridade</th><th class="n">Qtd</th><th class="n">Preço (€)</th><th class="n">Total (€)</th><th class="n">Variação</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="rb-wrap"><table id="t-col"><thead><tr><th>Carta</th><th>Raridade</th><th class="n">Qtd</th><th class="n">Preço anterior</th><th class="n">Preço atual</th><th class="n">Total (€)</th><th class="n">Variação</th></tr></thead><tbody></tbody></table></div></div>
     </div>
   </section>
 </div>
@@ -294,11 +294,12 @@ document.getElementById('f-col').addEventListener('change', e => { filtCol=e.tar
       const nm=document.createElement('div'); nm.className='nm'; nm.textContent=r.carta;
       const pr=document.createElement('div'); pr.className='pr'; pr.textContent=r.preco_eur==null?'sem preço':eu(r.preco_eur)+(r.qtd>1?' · total '+eu(r.total_eur):'');
       const ar=seta(r); if(ar) pr.appendChild(ar);
-      it.append(w,nm,pr); g.appendChild(it); });
+      const an=document.createElement('div'); an.className='pr'; an.textContent=r.preco_anterior_eur==null?'':'antes '+eu(r.preco_anterior_eur);
+      it.append(w,nm,pr,an); g.appendChild(it); });
     if($('p-colecao').hidden===false && d.historico.length) lines($('mc-hist'), d.historico, 'serie', usd, 'total_eur');
     const tb=document.querySelector('#t-col tbody'); tb.innerHTML='';
     ord.forEach(r=>{ const tr=tb.insertRow(); tr.insertCell().textContent=r.carta; tr.insertCell().textContent=r.raridade;
-      [String(r.qtd), r.preco_eur==null?'—':eu(r.preco_eur), r.total_eur==null?'—':eu(r.total_eur)].forEach(t=>{ const c=tr.insertCell(); c.className='n'; c.textContent=t; });
+      [String(r.qtd), r.preco_anterior_eur==null?'—':eu(r.preco_anterior_eur), r.preco_eur==null?'—':eu(r.preco_eur), r.total_eur==null?'—':eu(r.total_eur)].forEach(t=>{ const c=tr.insertCell(); c.className='n'; c.textContent=t; });
       const v=tr.insertCell(); v.className='n'; const ar=seta(r,true); if(ar) v.appendChild(ar); else v.textContent='—'; });
   }
   async function abrir(){
